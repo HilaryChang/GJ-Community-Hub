@@ -456,11 +456,27 @@ function jsonImportComparisonRows(current,incoming){
   if(!same(current.auditLog,incoming.auditLog))rows.push({title:"異動紀錄內容不同",details:[`目前 ${current.auditLog.length} 筆 → 匯入後 ${incoming.auditLog.length} 筆`]});
   return rows;
 }
+function appendComparisonVersionInfo(container,versions){
+  const formatTime=value=>{
+    if(value===undefined||value===null||String(value).trim()==="")return "未提供";
+    const date=new Date(value);
+    if(Number.isNaN(date.getTime()))return "時間格式無法辨識";
+    return new Intl.DateTimeFormat("zh-TW",{timeZone:"Asia/Taipei",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit",hourCycle:"h23"}).format(date)+"（Asia/Taipei）";
+  };
+  for(const [label,source] of versions){
+    const paragraph=document.createElement("p"),title=document.createElement("strong");
+    paragraph.className="muted";title.textContent=label;
+    const editor=typeof source?.editor==="string"?source.editor.trim():"";
+    paragraph.append(title,document.createElement("br"),"資料時間："+formatTime(source?.updatedAt),document.createElement("br"),"編輯者："+(editor||"未提供"));
+    container.append(paragraph);
+  }
+}
 function previewJsonImport(incoming,filename){
   const rows=jsonImportComparisonRows(data,incoming),warning=V.compareImport(data,incoming).warning;
   pendingJsonImport=incoming;
   $("#import-review-intro").textContent=`檔案：${filename}。${rows.length?`共 ${rows.length} 組差異，以下由「目前資料」→「匯入後資料」列出。確認後將以此檔案覆蓋目前資料。`:"內容與目前資料相同，確認後將重新載入此檔案。"}${warning?" "+warning:""}`;
   const container=$("#import-review-body");container.replaceChildren();
+  if(rows.length)appendComparisonVersionInfo(container,[["目前資料",data],["匯入資料",incoming]]);
   if(rows.length){const list=document.createElement("ol");list.className="comparison-list";for(const row of rows){const item=document.createElement("li"),title=document.createElement("strong");title.textContent=row.title;item.append(title);if(row.details?.length){const details=document.createElement("ul");for(const text of row.details){const li=document.createElement("li");li.textContent=text;details.append(li)}item.append(details)}list.append(item)}container.append(list)}
   else{const message=document.createElement("p");message.className="muted";message.textContent="沒有需要覆蓋的內容差異。";container.append(message)}
   $("#confirm-json-import").textContent=rows.length?"確認覆蓋並匯入":"確認載入";
@@ -498,6 +514,7 @@ function showComparisonDialog(){
   const exact=!!importBaseline?.snapshot,rows=exact?comparisonRows(importBaseline.snapshot,makeComparisonSnapshot(data)):legacyComparisonRows();
   intro.textContent=exact?`與 ${at} 的${source}資料相比，共 ${rows.length} 組差異。`:`這份資料尚無可精確比對的基準快照。以下是 ${at} 之後的異動紀錄；舊資料可能無法列出完整差異。`;
   container.replaceChildren();
+  if(rows.length)appendComparisonVersionInfo(container,[["目前資料",data],[source+"資料",{updatedAt:importBaseline?.updatedAt,editor:importBaseline?.snapshot?.editor}]]);
   if(!rows.length){const p=document.createElement("p");p.className="muted";p.textContent=exact?"目前欄位與基準資料相同；仍可能有操作紀錄更新。":"找不到可顯示的異動紀錄。重新匯入或匯出 JSON 後，後續變更即可逐欄比對。";container.append(p)}
   else{const list=document.createElement("ol");list.className="comparison-list";for(const row of rows){const item=document.createElement("li"),title=document.createElement("strong");title.textContent=row.title;item.append(title);if(row.details?.length){const details=document.createElement("ul");for(const text of row.details){const detail=document.createElement("li");detail.textContent=text;details.append(detail)}item.append(details)}list.append(item)}container.append(list)}
   modal.showModal();
